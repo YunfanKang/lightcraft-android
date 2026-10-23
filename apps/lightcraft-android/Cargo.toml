@@ -17,6 +17,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 lightcraft-engine = { workspace = true }
 lightcraft-ui-egui = { workspace = true }
+lightcraft-android-perms = { workspace = true }
 egui = { workspace = true }
 serde_json = { workspace = true }
 log = { workspace = true }

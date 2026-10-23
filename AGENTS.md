@@ -42,7 +42,9 @@ of it. Full standard: `../craftrules/standards/never-crash.md`
 - **`unsafe` lives only in `crates/sysmem`** (one FFI call, `malloc_zone_pressure_relief`, that returns freed
   allocator pages to macOS after raw decodes). Every other production crate root has `#![forbid(unsafe_code)]`. A new
   unsafe need goes in an isolated, well-tested helper crate like it: `// SAFETY:` on every block, a safe API, a safe
-  fallback where possible, and a line here naming it. One attribute, not a block, is also allowed: `apps/lightcraft-android`
+  fallback where possible, and a line here naming it. The second such crate is `crates/android-perms`: Android's
+  runtime-permission Java methods through JNI, two blocks wrapping the JavaVM and activity pointers the activity hands
+  out. One attribute, not a block, is also allowed: `apps/lightcraft-android`
   exports its entry point as `#[unsafe(no_mangle)] fn android_main` (the symbol `android-activity` resolves), so that
   crate root is `#![deny(unsafe_code)]` with `#[allow(unsafe_code)]` on that item alone.
 - **Input-derived numbers are hostile:** `get()` instead of `[i]`/`[a..b]` for offsets from files, users, agents or

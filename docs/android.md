@@ -47,15 +47,16 @@ build is `cargo build --target aarch64-linux-android --release` with the NDK's c
 `packaging/android/AndroidManifest.xml` and the launcher icon from `assets/app-icon/`. No Gradle,
 no Java of our own. `CRAFT_FONTS_DIR` works as for every other build (Chinese and Japanese text).
 
-**First run on the device.** The app opens on the demo library. To see the camera roll, allow
-*Photos and videos* (older Android: *Files and media*) for LightCraft in Android Settings ▸ Apps ▸
-LightCraft ▸ Permissions: the host declares the permission but can't show the prompt yet (that
-needs JNI, below). Then File ▸ Import Photos… browses DCIM, Pictures and Download, and the
-sidebar's Local section lists those folders. Without the permission Android still lists those
-folders but hides every file in them (it doesn't refuse the folder), so the browser shows an empty
-Camera folder with a hint saying so. "Allow limited access" (Android 14's selected photos) counts
-as no permission here: only the files picked in the system sheet are visible, and that sheet
-needs JNI too.
+**First run on the device.** The app opens on the demo library and Android's permission dialog
+asks for *Photos and videos* (older Android: *Files and media*), through `crates/android-perms`
+(JNI). Allow it, then File ▸ Import Photos… browses DCIM, Pictures and Download, and the sidebar's
+Local section lists those folders. Without the permission Android still lists those folders but
+hides every file in them (it doesn't refuse the folder), so the browser shows an empty Camera
+folder with a hint and an *Allow Access…* button that asks again, and lists the folder again every
+second until the files appear. A permission refused with "don't ask again" shows no dialog any
+more: Android Settings ▸ Apps ▸ LightCraft ▸ Permissions is the way then. "Allow limited access"
+(Android 14's selected photos) counts as no permission here: only the files picked in the system
+sheet are visible, and that sheet is not wired up.
 
 ## Where things are on the device
 
@@ -89,11 +90,10 @@ the way to get a developed photo out, over USB or a file manager that can open `
 
 What has to land before the tablet build is comfortable, roughly in order:
 
-1. **The permission prompt, the share sheet and system-bar insets** need JNI
-   (`Activity.requestPermissions`, `ACTION_SEND`, MediaStore inserts so exports show in Photos,
-   `WindowInsets` so the status bar can stay visible with the interface laid out below it). The `jni` crate is pure Rust, but
-   calling into the JVM takes `unsafe`, so it goes into an isolated helper crate like `sysmem`
-   (`// SAFETY:` on every block) and needs a device to test on: a wrong signature aborts the JVM.
+1. **The share sheet and system-bar insets** need more JNI (`ACTION_SEND`, MediaStore inserts so
+   exports show in Photos, `WindowInsets` so the status bar can stay visible with the interface
+   laid out below it), next to the permission calls in `crates/android-perms`. Each needs a
+   device: a wrong signature is a Java exception, caught, but the feature then does nothing.
 2. **Memory.** A 24 MP raw plus pipeline intermediates is heavy for a tablet; the pipeline's draft
    and tile paths help, the `denoise` and `sam` features stay off, and `lightcraft-sysmem` is a
    no-op off macOS. Measure on a device before raising defaults.

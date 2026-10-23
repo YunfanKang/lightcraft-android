@@ -17,6 +17,20 @@ use crate::browser::{Browser, Done};
 use crate::dirs::{self, Dirs};
 use crate::prefs;
 
+/// Ask Android for the photos permission when it is missing: the system's dialog (once per
+/// install, or until the user says "don't ask again"; after that only the app's settings page).
+fn request_photo_permission(app: &AndroidApp) {
+    let perms = lightcraft_android_perms::media_permissions(AndroidApp::sdk_version());
+    match lightcraft_android_perms::granted(app, perms) {
+        Ok(true) => log::info!("photos permission granted"),
+        Ok(false) => match lightcraft_android_perms::request(app, perms) {
+            Ok(()) => log::info!("asked for {perms:?}"),
+            Err(e) => log::warn!("asking for {perms:?}: {e}"),
+        },
+        Err(e) => log::warn!("checking {perms:?}: {e}"),
+    }
+}
+
 /// File dialogs the UI asked for, answered by the browser window one at a time.
 type Requests = Rc<RefCell<VecDeque<(PickRequest, Sender<Vec<String>>)>>>;
 
@@ -107,6 +121,8 @@ impl Host {
         let prefs = prefs::Saver::new((!loaded.keep_file).then_some(prefs_path), written);
         let places = dirs::places(&dirs);
         let last_dir = places.iter().skip(2).map(|(_, p)| p.clone()).find(|p| p.is_dir()).unwrap_or_else(|| dirs.library.clone());
+        // the system's permission dialog over the window, at the first start
+        request_photo_permission(&android);
         Host { app, android, prefs, requests, browser: None, places, shared: dirs.shared.clone(), last_dir, zoomed: false }
     }
 }
@@ -148,6 +164,11 @@ impl eframe::App for Host {
     fn ui(&mut self, ui: &mut egui::Ui, frame: &mut eframe::Frame) {
         self.app.perf.host_frame_ms = frame.info().cpu_usage.map(|s| f64::from(s) * 1000.0);
         self.app.ui(ui);
+        if let Some((browser, _)) = self.browser.as_mut()
+            && browser.take_allow()
+        {
+            request_photo_permission(&self.android);
+        }
         if let Some((browser, _)) = self.browser.as_mut()
             && let Some(done) = browser.show(ui.ctx())
         {
