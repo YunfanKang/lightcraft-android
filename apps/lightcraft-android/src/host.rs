@@ -11,7 +11,7 @@ use lightcraft_engine::Session;
 use lightcraft_ui_egui::panels::library_problem::LibraryProblem;
 use lightcraft_ui_egui::pick::PickRequest;
 use lightcraft_ui_egui::{LightcraftApp, Services};
-use winit::platform::android::activity::AndroidApp;
+use winit::platform::android::activity::{AndroidApp, WindowManagerFlags};
 
 use crate::browser::{Browser, Done};
 use crate::dirs::{self, Dirs};
@@ -22,6 +22,8 @@ type Requests = Rc<RefCell<VecDeque<(PickRequest, Sender<Vec<String>>)>>>;
 
 struct Host {
     app: LightcraftApp,
+    /// The activity, for the usable area of the window.
+    android: AndroidApp,
     prefs: prefs::Saver,
     requests: Requests,
     browser: Option<(Browser, Sender<Vec<String>>)>,
@@ -65,7 +67,7 @@ fn open_session(dir: &std::path::Path) -> (Session, Option<LibraryProblem>) {
 }
 
 impl Host {
-    fn new(cc: &eframe::CreationContext<'_>, dirs: Dirs) -> Host {
+    fn new(cc: &eframe::CreationContext<'_>, android: AndroidApp, dirs: Dirs) -> Host {
         let prefs_path = dirs.config.join("ui.json");
         let loaded = prefs::load(&prefs_path, now_secs());
         let first_run = loaded.ui.is_none() && loaded.notice.is_none();
@@ -103,7 +105,7 @@ impl Host {
         let prefs = prefs::Saver::new((!loaded.keep_file).then_some(prefs_path), written);
         let places = dirs::places(&dirs);
         let last_dir = places.iter().skip(2).map(|(_, p)| p.clone()).find(|p| p.is_dir()).unwrap_or_else(|| dirs.library.clone());
-        Host { app, prefs, requests, browser: None, places, last_dir, zoomed: false }
+        Host { app, android, prefs, requests, browser: None, places, last_dir, zoomed: false }
     }
 }
 
@@ -130,6 +132,14 @@ impl eframe::App for Host {
     }
 
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        // the window can lie under the system bars or the soft keyboard: lay out in what's left
+        let r = self.android.content_rect();
+        if let Some(window) = raw.screen_rect
+            && let Some(ppp) = raw.viewports.get(&raw.viewport_id).and_then(|v| v.native_pixels_per_point)
+            && let Some(area) = crate::insets::content_area(window, (r.left, r.top, r.right, r.bottom), ppp)
+        {
+            raw.screen_rect = Some(area);
+        }
         self.app.raw_input_hook(raw);
     }
 
@@ -189,13 +199,18 @@ fn android_main(app: AndroidApp) {
     {
         log::warn!("settings folder stays {}", first.display());
     }
+    // Full screen: the window is laid out under the status bar on devices that draw edge to
+    // edge, and the menu bar ended up under the clock. Hidden, as in most editing apps; the
+    // insets a window could ask for instead need JNI (docs/android.md → Status).
+    app.set_window_flags(WindowManagerFlags::FULLSCREEN, WindowManagerFlags::empty());
+    let host_app = app.clone();
     let options = eframe::NativeOptions {
         android_app: Some(app),
         renderer: eframe::Renderer::Wgpu,
         viewport: egui::ViewportBuilder::default().with_title("LightCraft"),
         ..Default::default()
     };
-    let result = eframe::run_native("LightCraft", options, Box::new(move |cc| Ok(Box::new(Host::new(cc, dirs)))));
+    let result = eframe::run_native("LightCraft", options, Box::new(move |cc| Ok(Box::new(Host::new(cc, host_app, dirs)))));
     if let Err(e) = result {
         log::error!("{}", crate::start_failure(&e));
     }

@@ -4,8 +4,9 @@
 //! - a persistent library and settings in the app's own storage ([`dirs`], [`prefs`]);
 //! - a file browser in place of the native dialogs, for Import Photos…, Export's folder and the
 //!   preset files ([`browser`]); shared storage (the camera roll) needs the photos permission;
-//! - finger-sized controls (an interface zoom chosen for the screen) and the soft keyboard
-//!   (winit shows it for text fields);
+//! - finger-sized controls (an interface zoom chosen for the screen), the soft keyboard (winit
+//!   shows it for text fields), the status bar hidden and the usable area the activity reports
+//!   honoured ([`insets`]: no control ends up under a system bar);
 //! - the `log` crate on logcat (tag `lightcraft`).
 //!
 //! `cargo xtask android` checks that the crate compiles for `aarch64-linux-android`;
@@ -19,6 +20,7 @@
 
 pub mod browser;
 pub mod dirs;
+pub mod insets;
 pub mod prefs;
 
 #[cfg(target_os = "android")]

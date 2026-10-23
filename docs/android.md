@@ -77,6 +77,7 @@ the way to get a developed photo out, over USB or a file manager that can open `
 | File dialogs | `rfd`, on a thread | the host's own egui window (`browser.rs`) over the app, answering `Services::picker`; it starts in the camera roll and offers Library, Exports, Camera, Pictures, Downloads and Storage |
 | Export folder default | `~/Pictures/LightCraft Exports` | `Export/` beside the library (set as the session's last export folder on a first run) |
 | Controls | pointer-sized | an interface zoom chosen for the screen (1.25× on a 1280 × 800-point tablet) as long as the desktop layout still fits; the soft keyboard opens for text fields (winit) |
+| System bars | the window manager keeps the window clear of them | the status bar is hidden (`FULLSCREEN` window flag: devices that lay the window out edge to edge put the menu bar under the clock), and the usable area the activity reports (`content_rect`, e.g. above the soft keyboard) is what egui lays out in |
 | Logging | file + stderr (`logging.rs`) | logcat, tag `lightcraft` (`android_logger`) |
 | Menus, shortcuts | native menu bar (macOS), keyboard | the in-app menu bar; keyboard shortcuts work with a hardware keyboard |
 
@@ -84,8 +85,9 @@ the way to get a developed photo out, over USB or a file manager that can open `
 
 What has to land before the tablet build is comfortable, roughly in order:
 
-1. **The permission prompt and the share sheet** need JNI (`Activity.requestPermissions`,
-   `ACTION_SEND`, MediaStore inserts so exports show in Photos). The `jni` crate is pure Rust, but
+1. **The permission prompt, the share sheet and system-bar insets** need JNI
+   (`Activity.requestPermissions`, `ACTION_SEND`, MediaStore inserts so exports show in Photos,
+   `WindowInsets` so the status bar can stay visible with the interface laid out below it). The `jni` crate is pure Rust, but
    calling into the JVM takes `unsafe`, so it goes into an isolated helper crate like `sysmem`
    (`// SAFETY:` on every block) and needs a device to test on: a wrong signature aborts the JVM.
 2. **Memory.** A 24 MP raw plus pipeline intermediates is heavy for a tablet; the pipeline's draft
