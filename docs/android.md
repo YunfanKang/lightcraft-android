@@ -51,7 +51,11 @@ no Java of our own. `CRAFT_FONTS_DIR` works as for every other build (Chinese an
 *Photos and videos* (older Android: *Files and media*) for LightCraft in Android Settings ▸ Apps ▸
 LightCraft ▸ Permissions: the host declares the permission but can't show the prompt yet (that
 needs JNI, below). Then File ▸ Import Photos… browses DCIM, Pictures and Download, and the
-sidebar's Local section lists those folders.
+sidebar's Local section lists those folders. Without the permission Android still lists those
+folders but hides every file in them (it doesn't refuse the folder), so the browser shows an empty
+Camera folder with a hint saying so. "Allow limited access" (Android 14's selected photos) counts
+as no permission here: only the files picked in the system sheet are visible, and that sheet
+needs JNI too.
 
 ## Where things are on the device
 

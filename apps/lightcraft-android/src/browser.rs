@@ -52,6 +52,17 @@ pub fn list(dir: &Path, extensions: Option<&[&str]>) -> Result<Vec<Entry>, Strin
     Ok(dirs)
 }
 
+/// Why a shared-storage folder shows its subfolders but none of its files: Android (11 and later)
+/// lists a folder to an app without the photos permission, but hides every file in it that the
+/// app didn't create itself, instead of refusing the folder. Shown when `dir` is under `shared`
+/// and the listing found no file.
+pub fn hidden_files_hint(dir: &Path, shared: Option<&Path>, entries: &[Entry]) -> Option<String> {
+    let under_shared = shared.is_some_and(|s| dir.starts_with(s));
+    (under_shared && !entries.iter().any(|e| !e.is_dir)).then(|| {
+        "No files here? Android hides photos from LightCraft until it has the Photos and videos permission: Android Settings ▸ Apps ▸ LightCraft ▸ Permissions, then come back.".to_string()
+    })
+}
+
 /// Why `dir` can't be listed, with what to do about it.
 pub fn read_error(dir: &Path, e: &std::io::Error) -> String {
     if e.kind() == std::io::ErrorKind::PermissionDenied {
@@ -83,6 +94,8 @@ pub struct Browser {
     /// [`PickKind::Save`]: the file name.
     file_name: String,
     places: Vec<(String, PathBuf)>,
+    /// Shared storage, where Android hides files from an app without the photos permission.
+    shared: Option<PathBuf>,
 }
 
 /// How the dialog ended.
@@ -94,9 +107,9 @@ pub enum Done {
 
 impl Browser {
     /// A dialog for `request`, opened at `start` (the last folder used, or a place).
-    pub fn open(request: PickRequest, start: PathBuf, places: Vec<(String, PathBuf)>) -> Browser {
+    pub fn open(request: PickRequest, start: PathBuf, places: Vec<(String, PathBuf)>, shared: Option<PathBuf>) -> Browser {
         let file_name = request.file_name.clone().unwrap_or_default();
-        let mut b = Browser { request, dir: PathBuf::new(), entries: Ok(Vec::new()), selected: BTreeSet::new(), file_name, places };
+        let mut b = Browser { request, dir: PathBuf::new(), entries: Ok(Vec::new()), selected: BTreeSet::new(), file_name, places, shared };
         b.go(start);
         b
     }
@@ -164,6 +177,11 @@ impl Browser {
                     Ok(entries) => {
                         if entries.is_empty() {
                             ui.weak(tr("Nothing here"));
+                        }
+                        if self.request.kind != PickKind::Folder
+                            && let Some(hint) = hidden_files_hint(&self.dir, self.shared.as_deref(), entries)
+                        {
+                            ui.colored_label(ui.visuals().warn_fg_color, tr(&hint));
                         }
                         let mut go = None;
                         for e in entries.clone() {
@@ -278,11 +296,27 @@ mod tests {
     }
 
     #[test]
+    fn a_shared_folder_without_files_explains_the_missing_permission() {
+        let shared = Path::new("/storage/emulated/0");
+        let folder = |name: &str| Entry { name: name.into(), path: shared.join("DCIM").join(name), is_dir: true };
+        let file = |name: &str| Entry { name: name.into(), path: shared.join("DCIM/Camera").join(name), is_dir: false };
+        let hint = hidden_files_hint(&shared.join("DCIM"), Some(shared), &[folder("Camera")]);
+        assert!(hint.is_some_and(|h| h.contains("Photos and videos")), "subfolders but no files: Android is hiding them");
+        assert_eq!(hidden_files_hint(&shared.join("DCIM/Camera"), Some(shared), &[file("IMG_0001.jpg")]), None, "files are shown: no hint");
+        assert_eq!(
+            hidden_files_hint(Path::new("/data/user/0/pkg/files/Library"), Some(shared), &[]),
+            None,
+            "the app's own folder: nothing is hidden there"
+        );
+        assert_eq!(hidden_files_hint(&shared.join("DCIM"), None, &[]), None, "no shared storage known");
+    }
+
+    #[test]
     fn a_dialog_opens_at_its_start_folder_and_lists_it() {
         let dir = temp("open");
         std::fs::write(dir.join("one.png"), b"").unwrap();
         let req = PickRequest::files(None, "Photos", &["png"]);
-        let b = Browser::open(req, dir.clone(), Vec::new());
+        let b = Browser::open(req, dir.clone(), Vec::new(), None);
         assert_eq!(b.dir(), dir);
         assert_eq!(b.entries.as_ref().unwrap().len(), 1);
         assert_eq!(default_title(PickKind::Files), "Choose Photos");

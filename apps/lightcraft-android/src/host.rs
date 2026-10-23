@@ -28,6 +28,8 @@ struct Host {
     requests: Requests,
     browser: Option<(Browser, Sender<Vec<String>>)>,
     places: Vec<(String, PathBuf)>,
+    /// Shared storage, for the browser's permission hint.
+    shared: Option<PathBuf>,
     /// Where the next dialog opens: the last folder used.
     last_dir: PathBuf,
     /// The interface zoom was set for the screen (once; after that the user's).
@@ -105,7 +107,7 @@ impl Host {
         let prefs = prefs::Saver::new((!loaded.keep_file).then_some(prefs_path), written);
         let places = dirs::places(&dirs);
         let last_dir = places.iter().skip(2).map(|(_, p)| p.clone()).find(|p| p.is_dir()).unwrap_or_else(|| dirs.library.clone());
-        Host { app, android, prefs, requests, browser: None, places, last_dir, zoomed: false }
+        Host { app, android, prefs, requests, browser: None, places, shared: dirs.shared.clone(), last_dir, zoomed: false }
     }
 }
 
@@ -122,7 +124,7 @@ impl eframe::App for Host {
             && let Some((req, reply)) = self.requests.borrow_mut().pop_front()
         {
             let start = if self.last_dir.is_dir() { self.last_dir.clone() } else { self.places.first().map(|(_, p)| p.clone()).unwrap_or_default() };
-            self.browser = Some((Browser::open(req, start, self.places.clone()), reply));
+            self.browser = Some((Browser::open(req, start, self.places.clone(), self.shared.clone()), reply));
         }
         self.app.logic(ctx);
         let now = ctx.input(|i| i.time);
