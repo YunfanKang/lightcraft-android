@@ -31,11 +31,12 @@ commands:
                   check docs/parity-checklist.md (every cmd:/ctl: id and path it cites exists) and print the
                   Lightroom parity summary; --write refreshes the summary table in the document
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates (+ the web app)
+  android         cargo check --target aarch64-linux-android for the Android app (apps/lightcraft-android)
   web [--serve [port]] [--dev]
                   build the browser app (apps/lightcraft-web) into <target>/web-site/;
                   --serve serves it on http://127.0.0.1:<port> (default 8080)
   ci [--hardware] [--summary-md]
-                  fmt --check, clippy -D warnings, heif, test, GPU probe, parity refs, layers, assets, wasm
+                  fmt --check, clippy -D warnings, heif, test, GPU probe, parity refs, layers, assets, wasm, android
                   (stops at first failure); writes target/ci/report.json (machine, GPU adapters, data,
                   steps, skipped tests) and target/ci/summary.md; --hardware also runs the GPU tests on
                   every backend with a hardware adapter; --summary-md prints the Markdown summary
@@ -60,6 +61,7 @@ fn main() -> ExitCode {
         Some("bench") => bench::run(&root(), &rest),
         Some("parity") => parity::run(&root(), rest.contains(&"--write")),
         Some("wasm") => cmd_wasm(),
+        Some("android") => cmd_android(),
         Some("web") => web::run(&rest),
         Some("ci") => cmd_ci(&rest),
         Some("corpus") => cmd_corpus(rest.contains(&"--download")),
@@ -265,6 +267,32 @@ fn cmd_wasm() -> Result<(), String> {
     if failed == 0 { Ok(()) } else { Err(format!("{failed} crate(s) failed the wasm check")) }
 }
 
+/// The Rust target of the Android app (64-bit ARM, every phone and tablet since 2019 and the only
+/// ABI Google Play accepts on its own).
+const ANDROID_TARGET: &str = "aarch64-linux-android";
+
+/// `cargo check` of the Android host and everything under it. A check needs no NDK: nothing is
+/// linked, only compiled, so it catches `cfg(target_os)` gaps and non-portable dependencies on any
+/// machine (the APK build itself is described in docs/android.md).
+fn cmd_android() -> Result<(), String> {
+    if !target_installed(ANDROID_TARGET)? {
+        return Err(format!("the `{ANDROID_TARGET}` standard library is not installed; run `rustup target add {ANDROID_TARGET}`"));
+    }
+    let mut c = cargo();
+    c.args(["check", "--target", ANDROID_TARGET, "-p", "lightcraft-android", "--lib"]);
+    run(c, &format!("cargo check --target {ANDROID_TARGET} -p lightcraft-android --lib"))
+}
+
+/// Whether rustup has `target`'s standard library (`rustup target list --installed`). Without
+/// rustup (a distribution toolchain), the check is left to cargo.
+fn target_installed(target: &str) -> Result<bool, String> {
+    let out = match Command::new("rustup").args(["target", "list", "--installed"]).output() {
+        Ok(out) if out.status.success() => out,
+        _ => return Ok(true),
+    };
+    Ok(String::from_utf8_lossy(&out.stdout).lines().any(|l| l.trim() == target))
+}
+
 fn cmd_ci(args: &[&str]) -> Result<(), String> {
     let hardware = args.contains(&"--hardware");
     let print_md = args.contains(&"--summary-md");
@@ -364,6 +392,7 @@ fn cmd_ci(args: &[&str]) -> Result<(), String> {
     steps.push(("layers", Box::new(cmd_layers)));
     steps.push(("assets", Box::new(|| assets::run(&root))));
     steps.push(("wasm", Box::new(cmd_wasm)));
+    steps.push(("android", Box::new(cmd_android)));
 
     let mut results = Vec::new();
     let mut failure = None;

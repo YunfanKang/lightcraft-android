@@ -1,0 +1,37 @@
+# The Android host (apps/lightcraft-android) compiles for aarch64-linux-android. A check links
+# nothing, so no NDK is installed here; see docs/android.md.
+name: Android
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/lightcraft-android/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "xtask/**"
+      - ".github/workflows/android.yml"
+  pull_request:
+    paths:
+      - "apps/lightcraft-android/**"
+      - "crates/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "xtask/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo xtask android

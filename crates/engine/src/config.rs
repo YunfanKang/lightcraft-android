@@ -7,7 +7,9 @@
 //!    executable puts everything in `<exe dir>/LightCraftData`, so a copy on a USB stick leaves nothing in
 //!    `%APPDATA%`. If that folder can't be written (read-only medium, Program Files), a warning is logged
 //!    and the platform folder is used.
-//! 3. The platform convention: macOS `~/Library/Application Support/LightCraft`, Windows
+//! 3. The folder the host named ([`set_host_config_dir`]): Android has no `$HOME`, so its activity
+//!    passes its private data directory before the first session opens.
+//! 4. The platform convention: macOS `~/Library/Application Support/LightCraft`, Windows
 //!    `%APPDATA%\LightCraft`, Linux `$XDG_CONFIG_HOME/lightcraft` or `~/.config/lightcraft`.
 //!
 //! Hosts that have a file system (the desktop app, the CLI, the MCP server) share these defaults so a model
@@ -44,15 +46,32 @@ pub fn config_dir() -> Option<PathBuf> {
     } else {
         Platform::Other
     };
-    config_dir_with(platform, |name| std::env::var_os(name), portable_dir)
+    config_dir_with(platform, |name| std::env::var_os(name), portable_dir, HOST_DIR.get().cloned())
 }
 
+/// The settings folder a host without a home directory names (Android: the activity's private data
+/// directory). Set once, before any session opens; `$LIGHTCRAFT_CONFIG_DIR` and portable mode still
+/// win over it. `Err` returns the folder when one was already named (the first one stays).
+pub fn set_host_config_dir(dir: PathBuf) -> Result<(), PathBuf> {
+    HOST_DIR.set(dir)
+}
+
+static HOST_DIR: OnceLock<PathBuf> = OnceLock::new();
+
 /// `portable` is asked only without an override, so an isolated run never probes beside the executable.
-fn config_dir_with(platform: Platform, env: impl Fn(&str) -> Option<OsString>, portable: impl FnOnce() -> Option<PathBuf>) -> Option<PathBuf> {
+fn config_dir_with(
+    platform: Platform,
+    env: impl Fn(&str) -> Option<OsString>,
+    portable: impl FnOnce() -> Option<PathBuf>,
+    host: Option<PathBuf>,
+) -> Option<PathBuf> {
     if let Some(dir) = env("LIGHTCRAFT_CONFIG_DIR") {
         return (!dir.is_empty()).then(|| PathBuf::from(dir));
     }
     if let Some(dir) = portable() {
+        return Some(dir);
+    }
+    if let Some(dir) = host {
         return Some(dir);
     }
     match platform {
@@ -164,7 +183,27 @@ mod config_tests {
     use super::*;
 
     fn resolve(platform: Platform, vars: &[(&str, &str)]) -> Option<PathBuf> {
-        config_dir_with(platform, |name| vars.iter().find_map(|(key, value)| (*key == name).then(|| OsString::from(value))), || None)
+        config_dir_with(platform, |name| vars.iter().find_map(|(key, value)| (*key == name).then(|| OsString::from(value))), || None, None)
+    }
+
+    /// A host without a home directory (Android) names the folder; the explicit override still wins.
+    #[test]
+    fn host_named_folder_replaces_the_platform_default() {
+        let host = Some(PathBuf::from("/data/user/0/ai.storyteller.lightcraft/files/lightcraft"));
+        let env =
+            |vars: &'static [(&str, &str)]| move |name: &str| vars.iter().find_map(|(key, value)| (*key == name).then(|| OsString::from(value)));
+        assert_eq!(config_dir_with(Platform::Other, env(&[]), || None, host.clone()), host, "no HOME, no XDG: the host's folder");
+        assert_eq!(config_dir_with(Platform::Other, env(&[("HOME", "/home/u")]), || None, host.clone()), host, "ahead of the platform folder");
+        assert_eq!(
+            config_dir_with(Platform::Other, env(&[("LIGHTCRAFT_CONFIG_DIR", "/tmp/lc")]), no_portable_probe, host.clone()),
+            Some(PathBuf::from("/tmp/lc")),
+            "the explicit override comes first"
+        );
+        assert_eq!(
+            config_dir_with(Platform::Other, env(&[]), || Some(PathBuf::from("/usb/LightCraftData")), host),
+            Some(PathBuf::from("/usb/LightCraftData")),
+            "portable mode too"
+        );
     }
 
     /// An override is used as is: portable mode is not even looked for.
@@ -192,7 +231,7 @@ mod config_tests {
             assert!(data.is_dir());
             assert_eq!(std::fs::read_dir(&data).unwrap().count(), 0, "the write probe is removed");
             let found = portable_dir_in(&exe).unwrap();
-            let actual = config_dir_with(Platform::Windows, |name| (name == "APPDATA").then(|| OsString::from("/roaming")), || found);
+            let actual = config_dir_with(Platform::Windows, |name| (name == "APPDATA").then(|| OsString::from("/roaming")), || found, None);
             assert_eq!(actual, Some(data));
             let _ = std::fs::remove_dir_all(&exe);
         }
@@ -219,6 +258,7 @@ mod config_tests {
                     Some(OsString::from("isolated/settings"))
                 },
                 no_portable_probe,
+                None,
             );
             assert_eq!(actual, Some(PathBuf::from("isolated/settings")));
         }
@@ -234,7 +274,8 @@ mod config_tests {
                         assert_eq!(name, "LIGHTCRAFT_CONFIG_DIR");
                         Some(OsString::new())
                     },
-                    no_portable_probe
+                    no_portable_probe,
+                    None
                 ),
                 None
             );
@@ -258,7 +299,7 @@ mod config_tests {
     fn config_override_preserves_non_unicode_paths() {
         use std::os::unix::ffi::OsStringExt as _;
         let value = OsString::from_vec(b"isolated/\xff".to_vec());
-        assert_eq!(config_dir_with(Platform::Mac, |_| Some(value.clone()), no_portable_probe), Some(PathBuf::from(value)));
+        assert_eq!(config_dir_with(Platform::Mac, |_| Some(value.clone()), no_portable_probe, None), Some(PathBuf::from(value)));
     }
 }
 

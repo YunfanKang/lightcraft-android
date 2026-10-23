@@ -404,7 +404,7 @@ cargo run --release -p lightcraft -- --memory           # a throwaway in-memory 
 cargo run --release -p lightcraft -- --control 7980     # with the automation channel
 cargo xtask web --serve                                 # the same app in the browser: http://127.0.0.1:8080/
 cargo run --release -p lightcraft-cli -- render photo.jpg -o out.jpg --set light.exposure=0.5
-cargo xtask ci                                          # fmt, clippy, HEIF, tests, parity, layers, assets, WASM
+cargo xtask ci                                          # fmt, clippy, HEIF, tests, parity, layers, assets, WASM, Android
 ```
 
 CI defaults to line-table debug information and one build job per 1.5 GB of RAM
@@ -477,7 +477,9 @@ directive ending in `*` covers every target starting with it, as in `lightcraft*
 too, and still in `lightcraft-panics.log` in the temp folder. The logger is `apps/lightcraft/src/logging.rs`.
 
 The web build needs the `wasm32-unknown-unknown` target and the matching `wasm-bindgen` CLI
-(`cargo xtask web` prints the exact install command); see [docs/web.md](docs/web.md).
+(`cargo xtask web` prints the exact install command); see [docs/web.md](docs/web.md). The Android
+check (`cargo xtask android`, part of `ci`) needs `rustup target add aarch64-linux-android`; the
+Android host is a skeleton, see [docs/android.md](docs/android.md).
 
 **Nix** builds the desktop app and `lightcraft-cli` (the Nix build always includes the craft-fonts input, so Japanese
 text has glyphs):

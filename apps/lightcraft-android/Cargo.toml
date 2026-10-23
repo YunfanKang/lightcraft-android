@@ -1,0 +1,30 @@
+[package]
+name = "lightcraft-android"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "LightCraft on Android: the egui UI in a NativeActivity (check with `cargo xtask android`; see docs/android.md)"
+
+[lints]
+workspace = true
+
+[lib]
+# `cdylib`: the shared object the Android activity loads (`liblightcraft_android.so`); `rlib` so the
+# host-side unit tests build on every platform.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lightcraft-engine = { workspace = true }
+lightcraft-ui-egui = { workspace = true }
+egui = { workspace = true }
+log = { workspace = true }
+
+# The window: eframe on winit's NativeActivity backend (pure Rust; the GameActivity backend compiles
+# C++ from the Android Games SDK, so it is out). AccessKit has no NativeActivity adapter, so the
+# `accesskit` feature stays off here (eframe rejects the combination).
+[target.'cfg(target_os = "android")'.dependencies]
+eframe = { workspace = true, features = ["default_fonts", "wgpu", "android-native-activity"] }
+# the same winit eframe uses, for the `AndroidApp` handle the activity passes to `android_main`
+winit = { version = "0.30", default-features = false, features = ["android-native-activity"] }
+android_logger = { version = "0.15", default-features = false }
