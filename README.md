@@ -403,6 +403,7 @@ cargo run --release -p lightcraft -- ~/Pictures/trip    # import your photos (fo
 cargo run --release -p lightcraft -- --memory           # a throwaway in-memory demo session (writes nothing)
 cargo run --release -p lightcraft -- --control 7980     # with the automation channel
 cargo xtask web --serve                                 # the same app in the browser: http://127.0.0.1:8080/
+cargo xtask apk --install                               # the tablet build, installed on a connected Android device
 cargo run --release -p lightcraft-cli -- render photo.jpg -o out.jpg --set light.exposure=0.5
 cargo xtask ci                                          # fmt, clippy, HEIF, tests, parity, layers, assets, WASM, Android
 ```
@@ -478,8 +479,8 @@ too, and still in `lightcraft-panics.log` in the temp folder. The logger is `app
 
 The web build needs the `wasm32-unknown-unknown` target and the matching `wasm-bindgen` CLI
 (`cargo xtask web` prints the exact install command); see [docs/web.md](docs/web.md). The Android
-check (`cargo xtask android`, part of `ci`) needs `rustup target add aarch64-linux-android`; the
-Android host is a skeleton, see [docs/android.md](docs/android.md).
+check (`cargo xtask android`, part of `ci`) needs `rustup target add aarch64-linux-android`;
+`cargo xtask apk` builds the tablet APK with the Android SDK, see [docs/android.md](docs/android.md).
 
 **Nix** builds the desktop app and `lightcraft-cli` (the Nix build always includes the craft-fonts input, so Japanese
 text has glyphs):

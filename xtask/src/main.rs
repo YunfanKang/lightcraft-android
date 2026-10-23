@@ -3,6 +3,7 @@
 //! Pure Rust (std + serde_json; flate2/brotli for the web bundle). External tools (`cargo`, `curl`, `tar`) are
 //! invoked through `std::process::Command`.
 
+mod apk;
 mod assets;
 mod bench;
 mod ci_report;
@@ -32,6 +33,9 @@ commands:
                   Lightroom parity summary; --write refreshes the summary table in the document
   wasm            cargo check --target wasm32-unknown-unknown for the wasm-safe crates (+ the web app)
   android         cargo check --target aarch64-linux-android for the Android app (apps/lightcraft-android)
+  apk [--dev] [--install]
+                  build the Android app and package it as a debug-signed APK in <target>/android/ with the
+                  Android SDK's tools (ANDROID_HOME, an NDK; see docs/android.md); --install runs adb install
   web [--serve [port]] [--dev]
                   build the browser app (apps/lightcraft-web) into <target>/web-site/;
                   --serve serves it on http://127.0.0.1:<port> (default 8080)
@@ -62,6 +66,7 @@ fn main() -> ExitCode {
         Some("parity") => parity::run(&root(), rest.contains(&"--write")),
         Some("wasm") => cmd_wasm(),
         Some("android") => cmd_android(),
+        Some("apk") => apk::run_cmd(&rest),
         Some("web") => web::run(&rest),
         Some("ci") => cmd_ci(&rest),
         Some("corpus") => cmd_corpus(rest.contains(&"--download")),
